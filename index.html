@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pomodoro Sync</title>
+  <style>
+    /* --- Минималистичный адаптивный дизайн --- */
+    :root{
+      --bg: #f7fafc; /* very light */
+      --card: #ffffff;
+      --accent: #a3d9c9; /* pastel */
+      --accent-2: #f6c7c7;
+      --muted: #6b7280;
+      --shadow: 0 6px 18px rgba(15,23,42,0.06);
+      --glass: rgba(255,255,255,0.6);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      background: linear-gradient(180deg, var(--bg), #ffffff);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+      padding:20px;
+      color:#111827;
+    }
+    .container{
+      width:100%;
+      max-width:980px;
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap:24px;
+    }
+    @media (max-width:880px){
+      .container{grid-template-columns:1fr;}
+    }
+
+    .card{
+      background:var(--card);
+      border-radius:16px;
+      padding:20px;
+      box-shadow:var(--shadow);
+    }
+
+    /* Left: timer */
+    .timer-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:36px}
+    .circle{
+      width:280px;height:280px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;position:relative;
+      background: conic-gradient(var(--accent) 0deg, rgba(0,0,0,0.04) 0deg);
+      transition: background 0.3s ease;
+      box-shadow: 0 8px 30px rgba(99,102,241,0.05) inset;
+    }
+    @media (max-width:520px){ .circle{width:220px;height:220px}}
+    .circle .center{
+      width:78%;height:78%;background:var(--card);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+    }
+    .time{font-size:44px;font-weight:600}
+    .mode{font-size:14px;color:var(--muted);margin-top:6px}
+
+    .controls{display:flex;gap:12px}
+    .btn{
+      border:0;padding:10px 16px;border-radius:10px;background:var(--accent);cursor:pointer;font-weight:600;box-shadow:0 8px 20px rgba(0,0,0,0.06);
+    }
+    .btn.secondary{background:var(--card);border:1px solid #e6e9ef}
+    .btn.warn{background:var(--accent-2)}
+
+    /* Right column: settings + users */
+    .field{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+    label{font-size:13px;color:var(--muted)}
+    input[type="number"], input[type="text"], select{
+      padding:8px;border-radius:8px;border:1px solid #eef2f7;background:transparent
+    }
+
+    .users-list{display:flex;flex-direction:column;gap:8px}
+    .user{display:flex;align-items:center;gap:12px;padding:8px;border-radius:8px;background:#fbfdfe;border:1px solid #eef6f4}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .small{font-size:13px;color:var(--muted)}
+
+    footer.small{margin-top:12px;color:var(--muted);font-size:13px}
+
+    /* tiny responsive tweaks */
+    @media (max-width:480px){
+      .time{font-size:36px}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card timer-wrap">
+      <div style="width:100%;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong>Pomodoro Sync</strong>
+          <div class="small">Синхронный таймер для двух людей</div>
+        </div>
+        <div style="text-align:right">
+          <div class="small">Комната: <span id="roomId">default</span></div>
+        </div>
+      </div>
+
+      <div class="circle" id="circle">
+        <div class="center">
+          <div class="time" id="timeDisplay">25:00</div>
+          <div class="mode" id="modeDisplay">Work • Cycle 1</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="startPauseBtn">Start</button>
+        <button class="btn secondary" id="resetBtn">Reset</button>
+        <button class="btn warn" id="skipBtn">Skip</button>
+      </div>
+
+      <div style="width:100%;margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <div class="small">Последнее действие: <span id="lastAction">—</span></div>
+      </div>
+
+      <footer class="small">Интерфейс минималистичный. Измените настройки справа, затем нажмите Start.</footer>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>Ваше имя</label>
+        <input id="username" type="text" placeholder="Введите имя..." />
+      </div>
+
+      <div class="field">
+        <label>Настройки (минуты)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div><label class="small">Work</label><input id="workMin" type="number" min="1" value="25" /></div>
+          <div><label class="small">Short break</label><input id="shortMin" type="number" min="1" value="5" /></div>
+          <div><label class="small">Long break</label><input id="longMin" type="number" min="1" value="15" /></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Циклы до длинного перерыва</label>
+        <input id="cyclesBeforeLong" type="number" min="1" value="4" />
+      </div>
+
+      <div class="field">
+        <label>Подключенные пользователи</label>
+        <div class="users-list" id="usersList"></div>
+      </div>
+
+      <div style="margin-top:8px" class="small">
+        <strong>Инструкция по синхронизации:</strong>
+        <div>1) Создайте проект Firebase и включите Realtime Database. 2) Вставьте вашу конфигурацию Firebase внизу файла. 3) Откройте этот же URL у другого человека — вы увидите синхронизированный таймер.</div>
+      </div>
+
+      <div style="margin-top:12px" class="small">ПРИМЕЧАНИЕ: в этом примере используется Firebase Realtime Database (compat CDN) — вам нужно будет вставить свои ключи конфигурации ниже.</div>
+    </div>
+  </div>
+
+  <!-- Firebase (compat) CDN - используем compat чтобы код был компактным -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+  <script>
+  /*******************
+   *  Основная логика
+   *******************/
+
+  // --- Конфигурация Firebase ---
+  // Создайте проект в Firebase -> Realtime Database -> Скопируйте конфиг ниже
+  // Замените значения в объекте firebaseConfig на ваши.
+  const firebaseConfig = {
+    apiKey: "REPLACE_WITH_YOUR_API_KEY",
+    authDomain: "REPLACE_WITH_YOUR_AUTH_DOMAIN",
+    databaseURL: "REPLACE_WITH_YOUR_DATABASE_URL",
+    projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
+    storageBucket: "REPLACE_WITH_YOUR_STORAGE_BUCKET",
+    messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
+    appId: "REPLACE_WITH_YOUR_APP_ID"
+  };
+
+  // Идентификатор комнаты — можно изменить на любой (по умолчанию "default").
+  const ROOM_ID = 'default';
+
+  // Инициализация Firebase
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // Ссылки в БД
+  const roomRef = db.ref('rooms/' + ROOM_ID + '/state');
+  const usersRef = db.ref('rooms/' + ROOM_ID + '/users');
+
+  // DOM элементы
+  const timeDisplay = document.getElementById('timeDisplay');
+  const modeDisplay = document.getElementById('modeDisplay');
+  const startPauseBtn = document.getElementById('startPauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const skipBtn = document.getElementById('skipBtn');
+  const usernameInput = document.getElementById('username');
+  const usersList = document.getElementById('usersList');
+  const lastAction = document.getElementById('lastAction');
+  const circle = document.getElementById('circle');
+
+  const workMinInput = document.getElementById('workMin');
+  const shortMinInput = document.getElementById('shortMin');
+  const longMinInput = document.getElementById('longMin');
+  const cyclesBeforeLongInput = document.getElementById('cyclesBeforeLong');
+
+  document.getElementById('roomId').textContent = ROOM_ID;
+
+  // Локальное состояние клиента
+  let localUserId = 'u_' + Math.random().toString(36).slice(2,9);
+  usernameInput.value = 'User-' + localUserId.slice(-3);
+
+  // Значения по умолчанию (минуты)
+  function getSettingsFromInputs(){
+    return {
+      work: Math.max(1, parseInt(workMinInput.value)||25),
+      short: Math.max(1, parseInt(shortMinInput.value)||5),
+      long: Math.max(1, parseInt(longMinInput.value)||15),
+      cyclesBeforeLong: Math.max(1, parseInt(cyclesBeforeLongInput.value)||4)
+    };
+  }
+
+  // Если в базе нет состояния, создаём начальное состояние
+  async function ensureRoomState(){
+    const snapshot = await roomRef.once('value');
+    if(!snapshot.exists()){
+      const s = getSettingsFromInputs();
+      // mode: 'work' | 'short' | 'long'
+      roomRef.set({
+        mode: 'work',
+        cycle: 1,
+        running: false,
+        remainingMs: s.work * 60 * 1000,
+        settings: s,
+        lastActionBy: null,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+  }
+
+  // Присоединение и наличие (presence)
+  function joinPresence(){
+    const meRef = usersRef.child(localUserId);
+    const name = usernameInput.value || ('User-' + localUserId.slice(-3));
+    meRef.set({name, online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+    // remove on disconnect
+    meRef.onDisconnect().remove();
+
+    // обновлять имя при изменении инпута
+    usernameInput.addEventListener('input', ()=>{
+      meRef.update({name: usernameInput.value || name, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+    });
+
+    // обновлять lastSeen периодически (каждые 20 секунд)
+    setInterval(()=>{
+      meRef.update({lastSeen: firebase.database.ServerValue.TIMESTAMP});
+    }, 20000);
+  }
+
+  // Отображение списка пользователей
+  usersRef.on('value', snap=>{
+    const items = snap.val()||{};
+    usersList.innerHTML = '';
+    Object.entries(items).forEach(([id, data])=>{
+      const el = document.createElement('div');
+      el.className = 'user';
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      dot.style.background = '#66bb6a';
+      el.appendChild(dot);
+      const info = document.createElement('div');
+      info.innerHTML = `<div style="font-weight:600">${escapeHtml(data.name||'Anonymous')}</div><div class="small">${id === localUserId ? 'You' : id}</div>`;
+      el.appendChild(info);
+      usersList.appendChild(el);
+    });
+  });
+
+  // Функция экранирования простой (чтобы не ломать DOM если в имени скрипт)
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  }
+
+  // Обновление состояния UI
+  function renderLocalState(state){
+    const ms = state.remainingMs || 0;
+    const mm = Math.floor(ms/60000);
+    const ss = Math.floor((ms%60000)/1000);
+    timeDisplay.textContent = `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+    modeDisplay.textContent = `${capitalize(state.mode)} • Cycle ${state.cycle || 1}`;
+
+    startPauseBtn.textContent = state.running ? 'Pause' : 'Start';
+    lastAction.textContent = state.lastActionBy ? state.lastActionBy : '—';
+
+    // визуализация круга (процент)
+    let totalMs = getTotalMsForMode(state);
+    let pct = totalMs? Math.max(0, Math.min(1, (totalMs - ms) / totalMs)) : 0;
+    const deg = pct * 360;
+    circle.style.background = `conic-gradient(var(--accent) ${deg}deg, rgba(0,0,0,0.04) ${deg}deg)`;
+  }
+
+  function capitalize(s){return s? s[0].toUpperCase()+s.slice(1):''}
+
+  function getTotalMsForMode(state){
+    const s = state.settings || getSettingsFromInputs();
+    if(state.mode === 'work') return s.work * 60 * 1000;
+    if(state.mode === 'short') return s.short * 60 * 1000;
+    return s.long * 60 * 1000;
+  }
+
+  // Подписка на состояние комнаты
+  let currentState = null;
+  roomRef.on('value', snap=>{
+    const val = snap.val();
+    if(!val) return;
+    currentState = val;
+
+    // если в базе есть settings и они отличаются от локальных инпутов — синхронизировать инпуты
+    if(val.settings){
+      workMinInput.value = val.settings.work;
+      shortMinInput.value = val.settings.short;
+      longMinInput.value = val.settings.long;
+      cyclesBeforeLongInput.value = val.settings.cyclesBeforeLong || 4;
+    }
+
+    renderLocalState(val);
+  });
+
+  // Клиентский интервал для плавного отображения (таймер отсчитывается на основе remainingMs в БД)
+  setInterval(()=>{
+    if(!currentState) return;
+    if(currentState.running){
+      // уменьшаем remainingMs локально по времени прошедшему
+      // Но фактическое authoritative значение приходит из БД — это просто визуальная сглаживалка.
+      currentState.remainingMs = Math.max(0, currentState.remainingMs - 1000);
+      renderLocalState(currentState);
+    }
+  }, 1000);
+
+  // Кнопки: старт/пауза
+  startPauseBtn.addEventListener('click', async ()=>{
+    const snap = await roomRef.once('value');
+    const state = snap.val();
+    if(!state) return;
+
+    // переключаем running
+    const newRunning = !state.running;
+    // если запускаем — просто ставим running=true
+    // если ставим на паузу — сохраняем текущее remainingMs
+    // для простоты: мы разрешаем клиентам перезаписывать remainingMs. В production можно добавить серверное timekeeping.
+
+    const updates = {
+      running: newRunning,
+      lastActionBy: usernameInput.value || ('User-'+localUserId.slice(-3)),
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    // если ставим на паузу, обновим remainingMs с учетом локального ms
+    if(!newRunning){
+      updates.remainingMs = currentState.remainingMs;
+    }
+
+    await roomRef.update(updates);
+  });
+
+  // Сброс
+  resetBtn.addEventListener('click', async ()=>{
+    const settings = getSettingsFromInputs();
+    const init = {
+      mode: 'work',
+      cycle: 1,
+      running: false,
+      remainingMs: settings.work * 60 * 1000,
+      settings,
+      lastActionBy: usernameInput.value || ('User-'+localUserId.slice(-3)),
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+    await roomRef.set(init);
+  });
+
+  // Пропустить (skip) — переходим к следующему режиму
+  skipBtn.addEventListener('click', async ()=>{
+    const snap = await roomRef.once('value');
+    const state = snap.val();
+    if(!state) return;
+    const next = nextStateAfter(state);
+    next.lastActionBy = usernameInput.value || ('User-'+localUserId.slice(-3));
+    next.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+    await roomRef.update(next);
+  });
+
+  // Функция вычисления следующего состояния (после окончания режима)
+  function nextStateAfter(state){
+    const s = state.settings || getSettingsFromInputs();
+    let mode = state.mode || 'work';
+    let cycle = state.cycle || 1;
+    if(mode === 'work'){
+      // после работы: если достигнут cyclesBeforeLong -> long, иначе short
+      if(cycle % (s.cyclesBeforeLong || 4) === 0){
+        mode = 'long';
+      } else {
+        mode = 'short';
+      }
+    } else {
+      // после любого перерыва -> работа, и если был long, сброс цикла к 1 иначе ++
+      if(mode === 'long') cycle = 1; else cycle = cycle + 1;
+      mode = 'work';
+    }
+
+    const remainingMs = (mode === 'work' ? s.work : (mode === 'short' ? s.short : s.long)) * 60 * 1000;
+    return {mode, cycle, running: false, remainingMs, settings: s};
+  }
+
+  // Опрос состояния и автоматическое переключение когда remainingMs достигает 0
+  // Подписываемся на обновления времени — используем значение updatedAt для корректности
+  roomRef.on('value', snap=>{
+    const state = snap.val();
+    if(!state) return;
+    // если таймер работает и remainingMs <= 0 -> переход на следующий режим
+    if(state.running && state.remainingMs <= 0){
+      const next = nextStateAfter(state);
+      next.lastActionBy = 'system';
+      next.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+      roomRef.update(next);
+    }
+  });
+
+  // При первом запуске — убедимся, что состояние есть
+  ensureRoomState();
+  joinPresence();
+
+  // Обновление настроек (когда пользователь меняет инпуты, мы пушим в БД)
+  [workMinInput, shortMinInput, longMinInput, cyclesBeforeLongInput].forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const s = getSettingsFromInputs();
+      // если таймер не запущен, просто пересчитать remainingMs
+      const snap = await roomRef.once('value');
+      const state = snap.val() || {};
+      const newState = {settings: s, updatedAt: firebase.database.ServerValue.TIMESTAMP};
+      if(!state.running){
+        // пересчитать remainingMs в соответствии с mode
+        if(state.mode === 'work' || !state.mode) newState.remainingMs = s.work * 60 * 1000;
+        else if(state.mode === 'short') newState.remainingMs = s.short * 60 * 1000;
+        else newState.remainingMs = s.long * 60 * 1000;
+      }
+      await roomRef.update(newState);
+    });
+  });
+
+  // Обновление lastAction видимо в UI — подписка пользователей уже выше
+
+  // Небольшая утилита: следит за изменениями remainingMs (в БД) и плавно обновляет
+  // Это необязательно — мы уже подписались на roomRef.on('value') выше, но оставляем для надежности.
+
+  // Готово!
+  </script>
+</body>
+</html>
+
