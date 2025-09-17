@@ -161,13 +161,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
   <script>
-  /*******************
-   *  Основная логика
-   *******************/
+/*******************
+ *  Основная логика
+ *******************/
 
-  // --- Конфигурация Firebase ---
-  // Создайте проект в Firebase -> Realtime Database -> Скопируйте конфиг ниже
-  // Замените значения в объекте firebaseConfig на ваши.
+// --- Firebase config ---
 const firebaseConfig = {
   apiKey: "AIzaSyA1M0QuJABvZdOLAEbA28jhnJuRkHNkrYo",
   authDomain: "zhanym-6d7e8.firebaseapp.com",
@@ -179,283 +177,175 @@ const firebaseConfig = {
   measurementId: "G-DDZK46WJ3Z"
 };
 
+const ROOM_ID = "default";
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const roomRef = db.ref("rooms/" + ROOM_ID + "/state");
+const usersRef = db.ref("rooms/" + ROOM_ID + "/users");
 
-  // Идентификатор комнаты — можно изменить на любой (по умолчанию "default").
-  const ROOM_ID = 'default';
+// DOM
+const timeDisplay = document.getElementById("timeDisplay");
+const modeDisplay = document.getElementById("modeDisplay");
+const startPauseBtn = document.getElementById("startPauseBtn");
+const resetBtn = document.getElementById("resetBtn");
+const skipBtn = document.getElementById("skipBtn");
+const usernameInput = document.getElementById("username");
+const usersList = document.getElementById("usersList");
+const lastAction = document.getElementById("lastAction");
+const circle = document.getElementById("circle");
 
-  // Инициализация Firebase
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+const workMinInput = document.getElementById("workMin");
+const shortMinInput = document.getElementById("shortMin");
+const longMinInput = document.getElementById("longMin");
+const cyclesBeforeLongInput = document.getElementById("cyclesBeforeLong");
 
-  // Ссылки в БД
-  const roomRef = db.ref('rooms/' + ROOM_ID + '/state');
-  const usersRef = db.ref('rooms/' + ROOM_ID + '/users');
+document.getElementById("roomId").textContent = ROOM_ID;
 
-  // DOM элементы
-  const timeDisplay = document.getElementById('timeDisplay');
-  const modeDisplay = document.getElementById('modeDisplay');
-  const startPauseBtn = document.getElementById('startPauseBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const skipBtn = document.getElementById('skipBtn');
-  const usernameInput = document.getElementById('username');
-  const usersList = document.getElementById('usersList');
-  const lastAction = document.getElementById('lastAction');
-  const circle = document.getElementById('circle');
+// Локальное состояние
+let localUserId = "u_" + Math.random().toString(36).slice(2, 9);
+usernameInput.value = "User-" + localUserId.slice(-3);
 
-  const workMinInput = document.getElementById('workMin');
-  const shortMinInput = document.getElementById('shortMin');
-  const longMinInput = document.getElementById('longMin');
-  const cyclesBeforeLongInput = document.getElementById('cyclesBeforeLong');
+function getSettingsFromInputs() {
+  return {
+    work: parseInt(workMinInput.value) || 25,
+    short: parseInt(shortMinInput.value) || 5,
+    long: parseInt(longMinInput.value) || 15,
+    cyclesBeforeLong: parseInt(cyclesBeforeLongInput.value) || 4
+  };
+}
 
-  document.getElementById('roomId').textContent = ROOM_ID;
-
-  // Локальное состояние клиента
-  let localUserId = 'u_' + Math.random().toString(36).slice(2,9);
-  usernameInput.value = 'User-' + localUserId.slice(-3);
-
-  // Значения по умолчанию (минуты)
-  function getSettingsFromInputs(){
-    return {
-      work: Math.max(1, parseInt(workMinInput.value)||25),
-      short: Math.max(1, parseInt(shortMinInput.value)||5),
-      long: Math.max(1, parseInt(longMinInput.value)||15),
-      cyclesBeforeLong: Math.max(1, parseInt(cyclesBeforeLongInput.value)||4)
-    };
+// Вычисление оставшегося времени
+function getRemaining(state) {
+  if (state.running && state.startTime && state.durationMs) {
+    const elapsed = Date.now() - state.startTime;
+    return Math.max(0, state.durationMs - elapsed);
   }
+  return state.remainingMs || 0;
+}
 
-  // Если в базе нет состояния, создаём начальное состояние
-  async function ensureRoomState(){
-    const snapshot = await roomRef.once('value');
-    if(!snapshot.exists()){
-      const s = getSettingsFromInputs();
-      // mode: 'work' | 'short' | 'long'
-      roomRef.set({
-        mode: 'work',
-        cycle: 1,
-        running: false,
-        remainingMs: s.work * 60 * 1000,
-        settings: s,
-        lastActionBy: null,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-      });
-    }
-  }
+// Отображение
+function render(state) {
+  const remaining = getRemaining(state);
+  const mm = String(Math.floor(remaining / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0");
+  timeDisplay.textContent = `${mm}:${ss}`;
+  modeDisplay.textContent = `${state.mode} • Cycle ${state.cycle}`;
+  startPauseBtn.textContent = state.running ? "Pause" : "Start";
+  lastAction.textContent = state.lastActionBy || "—";
 
-  // Присоединение и наличие (presence)
-  function joinPresence(){
-    const meRef = usersRef.child(localUserId);
-    const name = usernameInput.value || ('User-' + localUserId.slice(-3));
-    meRef.set({name, online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP});
-    // remove on disconnect
-    meRef.onDisconnect().remove();
+  const pct = state.durationMs ? (1 - remaining / state.durationMs) : 0;
+  circle.style.background = `conic-gradient(var(--accent) ${pct * 360}deg, rgba(0,0,0,0.04) ${pct * 360}deg)`;
+}
 
-    // обновлять имя при изменении инпута
-    usernameInput.addEventListener('input', ()=>{
-      meRef.update({name: usernameInput.value || name, lastSeen: firebase.database.ServerValue.TIMESTAMP});
-    });
-
-    // обновлять lastSeen периодически (каждые 20 секунд)
-    setInterval(()=>{
-      meRef.update({lastSeen: firebase.database.ServerValue.TIMESTAMP});
-    }, 20000);
-  }
-
-  // Отображение списка пользователей
-  usersRef.on('value', snap=>{
-    const items = snap.val()||{};
-    usersList.innerHTML = '';
-    Object.entries(items).forEach(([id, data])=>{
-      const el = document.createElement('div');
-      el.className = 'user';
-      const dot = document.createElement('div');
-      dot.className = 'dot';
-      dot.style.background = '#66bb6a';
-      el.appendChild(dot);
-      const info = document.createElement('div');
-      info.innerHTML = `<div style="font-weight:600">${escapeHtml(data.name||'Anonymous')}</div><div class="small">${id === localUserId ? 'You' : id}</div>`;
-      el.appendChild(info);
-      usersList.appendChild(el);
-    });
-  });
-
-  // Функция экранирования простой (чтобы не ломать DOM если в имени скрипт)
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-  }
-
-  // Обновление состояния UI
-  function renderLocalState(state){
-    const ms = state.remainingMs || 0;
-    const mm = Math.floor(ms/60000);
-    const ss = Math.floor((ms%60000)/1000);
-    timeDisplay.textContent = `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-    modeDisplay.textContent = `${capitalize(state.mode)} • Cycle ${state.cycle || 1}`;
-
-    startPauseBtn.textContent = state.running ? 'Pause' : 'Start';
-    lastAction.textContent = state.lastActionBy ? state.lastActionBy : '—';
-
-    // визуализация круга (процент)
-    let totalMs = getTotalMsForMode(state);
-    let pct = totalMs? Math.max(0, Math.min(1, (totalMs - ms) / totalMs)) : 0;
-    const deg = pct * 360;
-    circle.style.background = `conic-gradient(var(--accent) ${deg}deg, rgba(0,0,0,0.04) ${deg}deg)`;
-  }
-
-  function capitalize(s){return s? s[0].toUpperCase()+s.slice(1):''}
-
-  function getTotalMsForMode(state){
-    const s = state.settings || getSettingsFromInputs();
-    if(state.mode === 'work') return s.work * 60 * 1000;
-    if(state.mode === 'short') return s.short * 60 * 1000;
-    return s.long * 60 * 1000;
-  }
-
-  // Подписка на состояние комнаты
-  let currentState = null;
-  roomRef.on('value', snap=>{
-    const val = snap.val();
-    if(!val) return;
-    currentState = val;
-
-    // если в базе есть settings и они отличаются от локальных инпутов — синхронизировать инпуты
-    if(val.settings){
-      workMinInput.value = val.settings.work;
-      shortMinInput.value = val.settings.short;
-      longMinInput.value = val.settings.long;
-      cyclesBeforeLongInput.value = val.settings.cyclesBeforeLong || 4;
-    }
-
-    renderLocalState(val);
-  });
-
-  // Клиентский интервал для плавного отображения (таймер отсчитывается на основе remainingMs в БД)
-  setInterval(()=>{
-    if(!currentState) return;
-    if(currentState.running){
-      // уменьшаем remainingMs локально по времени прошедшему
-      // Но фактическое authoritative значение приходит из БД — это просто визуальная сглаживалка.
-      currentState.remainingMs = Math.max(0, currentState.remainingMs - 1000);
-      renderLocalState(currentState);
-    }
-  }, 1000);
-
-  // Кнопки: старт/пауза
-  startPauseBtn.addEventListener('click', async ()=>{
-    const snap = await roomRef.once('value');
-    const state = snap.val();
-    if(!state) return;
-
-    // переключаем running
-    const newRunning = !state.running;
-    // если запускаем — просто ставим running=true
-    // если ставим на паузу — сохраняем текущее remainingMs
-    // для простоты: мы разрешаем клиентам перезаписывать remainingMs. В production можно добавить серверное timekeeping.
-
-    const updates = {
-      running: newRunning,
-      lastActionBy: usernameInput.value || ('User-'+localUserId.slice(-3)),
-      updatedAt: firebase.database.ServerValue.TIMESTAMP
-    };
-
-    // если ставим на паузу, обновим remainingMs с учетом локального ms
-    if(!newRunning){
-      updates.remainingMs = currentState.remainingMs;
-    }
-
-    await roomRef.update(updates);
-  });
-
-  // Сброс
-  resetBtn.addEventListener('click', async ()=>{
-    const settings = getSettingsFromInputs();
-    const init = {
-      mode: 'work',
+// Первичная инициализация
+async function ensureRoomState() {
+  const snap = await roomRef.once("value");
+  if (!snap.exists()) {
+    const s = getSettingsFromInputs();
+    roomRef.set({
+      mode: "work",
       cycle: 1,
       running: false,
-      remainingMs: settings.work * 60 * 1000,
-      settings,
-      lastActionBy: usernameInput.value || ('User-'+localUserId.slice(-3)),
-      updatedAt: firebase.database.ServerValue.TIMESTAMP
-    };
-    await roomRef.set(init);
-  });
+      startTime: null,
+      durationMs: s.work * 60000,
+      remainingMs: s.work * 60000,
+      settings: s,
+      lastActionBy: null
+    });
+  }
+}
 
-  // Пропустить (skip) — переходим к следующему режиму
-  skipBtn.addEventListener('click', async ()=>{
-    const snap = await roomRef.once('value');
-    const state = snap.val();
-    if(!state) return;
-    const next = nextStateAfter(state);
-    next.lastActionBy = usernameInput.value || ('User-'+localUserId.slice(-3));
-    next.updatedAt = firebase.database.ServerValue.TIMESTAMP;
-    await roomRef.update(next);
-  });
+// Слушаем состояние
+let currentState = null;
+roomRef.on("value", (snap) => {
+  if (!snap.exists()) return;
+  currentState = snap.val();
+  render(currentState);
+});
 
-  // Функция вычисления следующего состояния (после окончания режима)
-  function nextStateAfter(state){
-    const s = state.settings || getSettingsFromInputs();
-    let mode = state.mode || 'work';
-    let cycle = state.cycle || 1;
-    if(mode === 'work'){
-      // после работы: если достигнут cyclesBeforeLong -> long, иначе short
-      if(cycle % (s.cyclesBeforeLong || 4) === 0){
-        mode = 'long';
-      } else {
-        mode = 'short';
-      }
+// Start / Pause
+startPauseBtn.onclick = async () => {
+  const snap = await roomRef.once("value");
+  const st = snap.val();
+  if (!st) return;
+
+  if (st.running) {
+    // Пауза
+    const remaining = getRemaining(st);
+    await roomRef.update({
+      running: false,
+      remainingMs: remaining,
+      startTime: null,
+      lastActionBy: usernameInput.value
+    });
+  } else {
+    // Старт
+    const duration = st.remainingMs || getSettingsFromInputs().work * 60000;
+    await roomRef.update({
+      running: true,
+      startTime: Date.now(),
+      durationMs: duration,
+      lastActionBy: usernameInput.value
+    });
+  }
+};
+
+// Reset
+resetBtn.onclick = async () => {
+  const s = getSettingsFromInputs();
+  await roomRef.set({
+    mode: "work",
+    cycle: 1,
+    running: false,
+    startTime: null,
+    durationMs: s.work * 60000,
+    remainingMs: s.work * 60000,
+    settings: s,
+    lastActionBy: usernameInput.value
+  });
+};
+
+// Skip
+skipBtn.onclick = async () => {
+  const st = (await roomRef.once("value")).val();
+  if (!st) return;
+  const s = st.settings || getSettingsFromInputs();
+
+  let mode = st.mode;
+  let cycle = st.cycle;
+  if (mode === "work") {
+    if (cycle % s.cyclesBeforeLong === 0) {
+      mode = "long";
     } else {
-      // после любого перерыва -> работа, и если был long, сброс цикла к 1 иначе ++
-      if(mode === 'long') cycle = 1; else cycle = cycle + 1;
-      mode = 'work';
+      mode = "short";
     }
-
-    const remainingMs = (mode === 'work' ? s.work : (mode === 'short' ? s.short : s.long)) * 60 * 1000;
-    return {mode, cycle, running: false, remainingMs, settings: s};
+  } else {
+    if (mode === "long") cycle = 1;
+    else cycle++;
+    mode = "work";
   }
 
-  // Опрос состояния и автоматическое переключение когда remainingMs достигает 0
-  // Подписываемся на обновления времени — используем значение updatedAt для корректности
-  roomRef.on('value', snap=>{
-    const state = snap.val();
-    if(!state) return;
-    // если таймер работает и remainingMs <= 0 -> переход на следующий режим
-    if(state.running && state.remainingMs <= 0){
-      const next = nextStateAfter(state);
-      next.lastActionBy = 'system';
-      next.updatedAt = firebase.database.ServerValue.TIMESTAMP;
-      roomRef.update(next);
-    }
+  const dur = mode === "work" ? s.work * 60000 : mode === "short" ? s.short * 60000 : s.long * 60000;
+  await roomRef.set({
+    mode,
+    cycle,
+    running: false,
+    startTime: null,
+    durationMs: dur,
+    remainingMs: dur,
+    settings: s,
+    lastActionBy: usernameInput.value
   });
+};
 
-  // При первом запуске — убедимся, что состояние есть
-  ensureRoomState();
-  joinPresence();
+// Локальный апдейт экрана каждую секунду
+setInterval(() => {
+  if (currentState) render(currentState);
+}, 1000);
 
-  // Обновление настроек (когда пользователь меняет инпуты, мы пушим в БД)
-  [workMinInput, shortMinInput, longMinInput, cyclesBeforeLongInput].forEach(inp=>{
-    inp.addEventListener('change', async ()=>{
-      const s = getSettingsFromInputs();
-      // если таймер не запущен, просто пересчитать remainingMs
-      const snap = await roomRef.once('value');
-      const state = snap.val() || {};
-      const newState = {settings: s, updatedAt: firebase.database.ServerValue.TIMESTAMP};
-      if(!state.running){
-        // пересчитать remainingMs в соответствии с mode
-        if(state.mode === 'work' || !state.mode) newState.remainingMs = s.work * 60 * 1000;
-        else if(state.mode === 'short') newState.remainingMs = s.short * 60 * 1000;
-        else newState.remainingMs = s.long * 60 * 1000;
-      }
-      await roomRef.update(newState);
-    });
-  });
+ensureRoomState();
+</script>
 
-  // Обновление lastAction видимо в UI — подписка пользователей уже выше
-
-  // Небольшая утилита: следит за изменениями remainingMs (в БД) и плавно обновляет
-  // Это необязательно — мы уже подписались на roomRef.on('value') выше, но оставляем для надежности.
-
-  // Готово!
-  </script>
 </body>
 </html>
 
