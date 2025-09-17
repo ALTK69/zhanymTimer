@@ -7,50 +7,6 @@
   <style>
     /* --- Минималистичный адаптивный дизайн --- */
 
-    /* --- Тёмный режим --- */
-body.dark {
-  background: linear-gradient(180deg, #1f2937, #111827);
-  color: #f9fafb;
-}
-body.dark .card {
-  background: #1e293b;
-  color: #f9fafb;
-}
-body.dark .mode {
-  color: #d1d5db;
-}
-body.dark input, 
-body.dark select {
-  background: #111827;
-  color: #f9fafb;
-  border: 1px solid #374151;
-}
-body.dark .btn.secondary {
-  background: #111827;
-  border: 1px solid #374151;
-  color: #f9fafb;
-}
-
-/* --- Кнопка переключения темы --- */
-.theme-toggle {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: var(--card);
-  box-shadow: var(--shadow);
-  cursor: pointer;
-  font-size: 18px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index: 999;
-}
-
-
   /* --- Анимация сердечек --- */
 .heart {
   position: fixed;
@@ -174,10 +130,6 @@ body.dark .btn.secondary {
   </style>
 </head>
 <body>
-
-<button class="theme-toggle" id="themeToggle">🌙</button>
-
-  
   <div class="container">
     <div class="card timer-wrap">
       <div style="width:100%;display:flex;justify-content:space-between;align-items:center">
@@ -453,23 +405,6 @@ ensureRoomState();
 
   // При клике по экрану — сердечко
   document.body.addEventListener("click", spawnHeart);
-</script>
-<script>
-  // Тёмный режим (переключатель)
-  const themeToggle = document.getElementById("themeToggle");
-
-  // Проверяем сохранённое состояние
-  if (localStorage.getItem("theme") === "dark") {
-    document.body.classList.add("dark");
-    themeToggle.textContent = "☀️";
-  }
-
-  themeToggle.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
-    const isDark = document.body.classList.contains("dark");
-    themeToggle.textContent = isDark ? "☀️" : "🌙";
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-  });
 </script>
 
 </body>
