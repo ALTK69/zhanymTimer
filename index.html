@@ -248,16 +248,18 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
   <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyA1M0QuJABvZdOLAEbA28jhnJuRkHNkrYo",
-      authDomain: "zhanym-6d7e8.firebaseapp.com",
-      databaseURL: "https://zhanym-6d7e8-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "zhanym-6d7e8",
-      storageBucket: "zhanym-6d7e8.appspot.com",
-      messagingSenderId: "115835636741",
-      appId: "1:115835636741:web:a800faa31340052702606c",
-      measurementId: "G-DDZK46WJ3Z"
-    };
+ const firebaseConfig = {
+    apiKey: "AIzaSyA1M0uJABvZdOLAEbA28jhnJuRkHNkrYo",
+    authDomain: "zhanym-6d7e8.firebaseapp.com",
+    databaseURL: "https://zhanym-6d7e8-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "zhanym-6d7e8",
+    storageBucket: "zhanym-6d7e8.firebasestorage.app",
+    messagingSenderId: "115835636741",
+    appId: "1:115835636741:web:a800faa31340052702606c",
+    measurementId: "G-DDZK46WJ3Z"
+  };
+
+  firebase.initializeApp(firebaseConfig);
 
     const ROOM_ID = "default";
     firebase.initializeApp(firebaseConfig);
